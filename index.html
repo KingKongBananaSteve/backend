@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Roblox Moderation Analytics</title>
+    <title>Roblox Moderation Analytics 5.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
@@ -19,31 +19,37 @@
             background-color: #161b22;
             border: 1px solid #30363d;
             border-radius: 8px;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+        .card:hover {
+            border-color: #8b949e;
+            transform: translateY(-4px);
         }
         .chart-container {
             position: relative;
-            height: 350px;
             width: 100%;
+            flex-grow: 1;
         }
-        /* Custom scrollbar for the activity log */
-        .activity-log::-webkit-scrollbar {
-            width: 6px;
-        }
-        .activity-log::-webkit-scrollbar-track {
-            background: #161b22;
-        }
-        .activity-log::-webkit-scrollbar-thumb {
-            background-color: #30363d;
-            border-radius: 3px;
-        }
-        .kpi-value.up { color: #28a745; }
-        .kpi-value.down { color: #dc3545; }
-        .kpi-value.neutral { color: #ffc107; }
+        .activity-log::-webkit-scrollbar { width: 6px; }
+        .activity-log::-webkit-scrollbar-track { background: #161b22; }
+        .activity-log::-webkit-scrollbar-thumb { background-color: #30363d; border-radius: 3px; }
+        
+        .kpi-value.up { color: #3fb950; }
+        .kpi-value.down { color: #f85149; }
+        .kpi-value.neutral { color: #e3b341; }
 
-        .tag-ban { background-color: #dc3545; color: white; }
-        .tag-warning { background-color: #ffc107; color: #161b22; }
-        .tag-delete { background-color: #6c757d; color: white; }
-        .tag-mute { background-color: #17a2b8; color: white; }
+        .tag-ban { background-color: #f85149; color: white; }
+        .tag-warning { background-color: #e3b341; color: #161b22; }
+        .tag-delete { background-color: #8b949e; color: white; }
+        .tag-mute { background-color: #58a6ff; color: #161b22; }
+        
+        .clickable { cursor: pointer; }
+        .clickable:hover { opacity: 0.8; }
+        
+        #filter-display { transition: all 0.3s ease; }
     </style>
 </head>
 <body class="antialiased">
@@ -53,83 +59,69 @@
         <!-- Header -->
         <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <div>
-                <h1 class="text-3xl font-bold text-white">Moderation Analytics</h1>
-                <p class="text-gray-400">Real-Time Roblox Trust & Safety Dashboard</p>
+                <h1 class="text-3xl font-bold text-white">Moderation Analytics 5.0</h1>
+                <p class="text-gray-400">AI-Enhanced Command Center</p>
             </div>
-            <div class="text-sm text-gray-400 mt-2 sm:mt-0">
-                <p>Last Update: <span id="last-updated" class="font-semibold text-white"></span></p>
-                <p>Status: <span class="text-green-400 font-bold">● Live</span></p>
+            <div class="text-sm text-gray-400 mt-2 sm:mt-0 flex items-center">
+                <div class="flex items-center mr-4">
+                    <span class="relative flex h-3 w-3 mr-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    <span class="font-bold text-green-400">Live</span>
+                </div>
+                <div>
+                    <p>Last Update: <span id="last-updated" class="font-semibold text-white"></span></p>
+                </div>
             </div>
         </header>
 
         <!-- KPIs -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="card p-4">
-                <h2 class="text-sm font-medium text-gray-400">Total Actions (24h)</h2>
-                <p id="kpi-total-actions" class="text-3xl font-bold text-white mt-1">--</p>
-                <p id="kpi-total-actions-change" class="text-sm font-medium">--</p>
-            </div>
-            <div class="card p-4">
-                <h2 class="text-sm font-medium text-gray-400">Ban Rate</h2>
-                <p id="kpi-ban-rate" class="text-3xl font-bold text-white mt-1">--</p>
-                <p id="kpi-ban-rate-change" class="text-sm font-medium">--</p>
-            </div>
-            <div class="card p-4">
-                <h2 class="text-sm font-medium text-gray-400">Appeal Success Rate</h2>
-                <p id="kpi-appeal-rate" class="text-3xl font-bold text-white mt-1">--</p>
-                <p id="kpi-appeal-rate-change" class="text-sm font-medium">--</p>
-            </div>
-            <div class="card p-4">
-                <h2 class="text-sm font-medium text-gray-400">Current Alert Level</h2>
-                <p id="kpi-alert-level" class="text-3xl font-bold text-yellow-400 mt-1">--</p>
-                <p class="text-sm text-gray-400">Based on volume</p>
-            </div>
+        <div id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <!-- KPI cards are injected here for stability -->
         </div>
 
         <!-- Main Content Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- Moderation Actions Over Time -->
-            <div class="card lg:col-span-2 p-4">
+            <div class="card lg:col-span-3">
                 <h3 class="font-semibold text-white mb-4">Moderation Actions (Last 24 Hours)</h3>
-                <div class="chart-container">
-                    <canvas id="actionsOverTimeChart"></canvas>
-                </div>
+                <div class="chart-container" style="height: 320px;"><canvas id="actionsOverTimeChart"></canvas></div>
             </div>
-
-            <!-- Action Type Distribution -->
-            <div class="card p-4">
+            
+            <div class="card">
                 <h3 class="font-semibold text-white mb-4">Action Type Distribution</h3>
-                <div class="chart-container" style="height: 280px;">
-                    <canvas id="actionTypeChart"></canvas>
-                </div>
+                <div class="chart-container" style="height: 200px;"><canvas id="actionTypeChart"></canvas></div>
                 <div id="action-type-legend" class="mt-4 text-sm text-gray-400 space-y-1"></div>
             </div>
 
-            <!-- Moderation Hotspots -->
-            <div class="card p-4">
-                 <h3 class="font-semibold text-white mb-4">Moderation Hotspots (by Category)</h3>
-                <div class="chart-container">
-                    <canvas id="hotspotsChart"></canvas>
-                </div>
+            <div class="card">
+                 <h3 class="font-semibold text-white mb-4">Moderator Performance</h3>
+                <div class="chart-container clickable" style="height: 280px;"><canvas id="modPerformanceChart"></canvas></div>
             </div>
 
-            <!-- Recent Activity Log -->
-            <div class="card lg:col-span-2 p-4 flex flex-col">
-                <h3 class="font-semibold text-white mb-4">Recent Moderation Activity</h3>
-                <div class="flex-grow overflow-y-auto activity-log" style="max-height: 350px;">
+            <div class="card">
+                <h3 class="font-semibold text-white mb-4">AI vs. Manual Actions</h3>
+                <div class="chart-container" style="height: 280px;"><canvas id="aiVsManualChart"></canvas></div>
+            </div>
+
+            <div class="card lg:col-span-3">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-white">Recent Moderation Activity</h3>
+                    <div id="filter-display" class="text-sm text-gray-400"></div>
+                </div>
+                <div class="flex-grow overflow-y-auto activity-log" style="max-height: 380px;">
                     <table class="w-full text-sm text-left">
                         <thead class="text-xs text-gray-400 uppercase sticky top-0 bg-[#161b22]">
                             <tr>
                                 <th scope="col" class="px-4 py-2">User ID</th>
                                 <th scope="col" class="px-4 py-2">Action</th>
                                 <th scope="col" class="px-4 py-2">Reason</th>
+                                <th scope="col" class="px-4 py-2">Moderator</th>
                                 <th scope="col" class="px-4 py-2">Timestamp</th>
                             </tr>
                         </thead>
-                        <tbody id="activity-log-body">
-                           <!-- JS will populate this -->
-                        </tbody>
+                        <tbody id="activity-log-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -144,16 +136,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Chart Contexts ---
     const ctxActionsOverTime = document.getElementById('actionsOverTimeChart').getContext('2d');
     const ctxActionType = document.getElementById('actionTypeChart').getContext('2d');
-    const ctxHotspots = document.getElementById('hotspotsChart').getContext('2d');
+    const ctxModPerformance = document.getElementById('modPerformanceChart').getContext('2d');
+    const ctxAiVsManual = document.getElementById('aiVsManualChart').getContext('2d');
 
     // --- Chart Instances ---
-    let actionsOverTimeChart, actionTypeChart, hotspotsChart;
+    let actionsOverTimeChart, actionTypeChart, modPerformanceChart, aiVsManualChart;
+
+    // --- State ---
+    let activeFilter = null;
 
     // --- Simulated Data Store ---
     const dataStore = {
         actions: [],
         categories: ['Harassment', 'Scamming', 'Inappropriate Content', 'Exploiting', 'Spam', 'Off-platform Behavior'],
         actionTypes: ['Ban', 'Warning', 'Asset Deletion', 'Mute'],
+        moderators: ['AutoMod-Ban', 'ModBot-A7', 'ModBot-B2', 'AdminJane', 'SafetySteve', 'GuardianZ', 'EnforcerE'],
         recentActivity: []
     };
 
@@ -165,44 +162,49 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateInitialData() {
         const now = dayjs();
         let currentTime = now.subtract(24, 'hour');
-        let baseBan = 10, baseWarn = 30, baseDel = 20, baseMute = 15;
         
         for (let i = 0; i < 24; i++) {
             dataStore.actions.push({
                 time: currentTime.format('HH:00'),
-                ban: baseBan + randomBetween(-5, 10),
-                warning: baseWarn + randomBetween(-10, 15),
-                delete: baseDel + randomBetween(-8, 12),
-                mute: baseMute + randomBetween(-5, 8)
+                ban: randomBetween(5, 15), warning: randomBetween(20, 40),
+                delete: randomBetween(15, 25), mute: randomBetween(10, 20)
             });
             currentTime = currentTime.add(1, 'hour');
         }
 
-        for (let i = 0; i < 20; i++) {
-            generateNewActivity();
-        }
+        for (let i = 0; i < 200; i++) { generateNewActivity(); }
         dataStore.recentActivity.sort((a,b) => b.rawTime - a.rawTime);
     }
 
     function generateNewActivity() {
         const now = dayjs();
         const action = dataStore.actionTypes[randomBetween(0, 3)];
+        
+        let moderator;
+        // If action is a ban, it's highly likely to be the AutoMod
+        if (action === 'Ban' && Math.random() < 0.8) {
+            moderator = 'AutoMod-Ban';
+        } else {
+            // Pick any other moderator
+            moderator = dataStore.moderators[randomBetween(1, dataStore.moderators.length - 1)];
+        }
+
         const newActivity = {
             id: `U${randomBetween(10000000, 99999999)}`,
             action: action,
             reason: dataStore.categories[randomBetween(0, 5)],
+            moderator: moderator,
+            isAutomated: moderator.includes('Mod'),
+            timeToAction: randomBetween(1, 60), // minutes
             timestamp: now.fromNow(),
             rawTime: now,
             tagClass: `tag-${action.split(' ')[0].toLowerCase()}`
         };
         dataStore.recentActivity.unshift(newActivity);
-        if (dataStore.recentActivity.length > 50) {
-            dataStore.recentActivity.pop();
-        }
+        if (dataStore.recentActivity.length > 500) dataStore.recentActivity.pop();
     }
     
     function updateData() {
-        // Update time series data
         const lastHour = dataStore.actions[dataStore.actions.length - 1];
         dataStore.actions.shift();
         dataStore.actions.push({
@@ -212,188 +214,207 @@ document.addEventListener('DOMContentLoaded', () => {
             delete: Math.max(8, lastHour.delete + randomBetween(-4, 4)),
             mute: Math.max(5, lastHour.mute + randomBetween(-3, 3))
         });
-        
-        // Add a new activity log entry
-        generateNewActivity();
+        for(let i=0; i<5; i++) generateNewActivity();
     }
 
     // --- Rendering and Chart Drawing ---
     function renderKPIs() {
-        const last24h = dataStore.actions.slice(-24);
-        const totalActions = last24h.reduce((sum, d) => sum + d.ban + d.warning + d.delete + d.mute, 0);
-        const prevTotalActions = totalActions - last24h[23].ban + last24h[0].ban; // Simplified change calc
-        const totalBans = last24h.reduce((sum, d) => sum + d.ban, 0);
-        
-        const banRate = ((totalBans / totalActions) * 100).toFixed(2);
-        const prevBanRate = (((totalBans - last24h[23].ban) / (totalActions - last24h[23].ban)) * 100).toFixed(2);
+        const last24hActivity = dataStore.recentActivity.filter(a => dayjs().diff(a.rawTime, 'hour') <= 24);
+        const prev24hActivity = dataStore.recentActivity.filter(a => dayjs().diff(a.rawTime, 'hour') > 24 && dayjs().diff(a.rawTime, 'hour') <= 48);
 
+        const totalActions = last24hActivity.length;
+        const prevTotalActions = prev24hActivity.length || 1;
+        
+        const totalBans = last24hActivity.filter(a => a.action === 'Ban').length;
+        const banRate = totalActions ? ((totalBans / totalActions) * 100).toFixed(2) : 0;
+        
         const appealRate = (randomBetween(1500, 2500) / 100).toFixed(2);
         const prevAppealRate = (appealRate * (1 + randomBetween(-5, 5) / 100)).toFixed(2);
-
-        updateKpiElement('kpi-total-actions', totalActions, prevTotalActions, true);
-        updateKpiElement('kpi-ban-rate', banRate, prevBanRate, false, '%');
-        updateKpiElement('kpi-appeal-rate', appealRate, prevAppealRate, false, '%');
+        
+        const activeMods = new Set(last24hActivity.map(a => a.moderator)).size;
+        const prevActiveMods = new Set(prev24hActivity.map(a => a.moderator)).size;
+        
+        const avgTimeToAction = totalActions ? (last24hActivity.reduce((sum, a) => sum + a.timeToAction, 0) / totalActions) : 0;
+        const prevAvgTimeToAction = prevTotalActions ? (prev24hActivity.reduce((sum, a) => sum + a.timeToAction, 0) / prevTotalActions) : 0;
 
         let alertLevel = 'Normal';
-        if (totalActions > 24 * 80) alertLevel = 'Elevated';
-        if (totalActions > 24 * 100) alertLevel = 'High';
-        document.getElementById('kpi-alert-level').textContent = alertLevel;
+        if (totalActions > 5000) alertLevel = 'High';
+        else if (totalActions > 3000) alertLevel = 'Elevated';
+        
+        const kpis = [
+            { id: 'total-actions', value: totalActions, prev: prevTotalActions, isInt: true },
+            { id: 'ban-rate', value: banRate, prev: 0, suffix: '%' },
+            { id: 'appeal-success', value: appealRate, prev: prevAppealRate, suffix: '%' },
+            { id: 'active-mods', value: activeMods, prev: prevActiveMods, isInt: true },
+            { id: 'time-to-action', value: avgTimeToAction.toFixed(1), prev: prevAvgTimeToAction, suffix: 'm', invertChange: true },
+            { id: 'alert-level', value: alertLevel, isStatic: true },
+        ];
+        
+        kpis.forEach(kpi => updateKpiElement(kpi));
     }
 
-    function updateKpiElement(id, value, prevValue, isInt, suffix = '') {
-        const el = document.getElementById(id);
-        const changeEl = document.getElementById(`${id}-change`);
-        const change = value - prevValue;
-        const changePercent = ((change / prevValue) * 100).toFixed(2);
-        
-        el.textContent = (isInt ? formatNumber(Math.round(value)) : value) + suffix;
-        
-        let changeText, changeClass;
-        if (change > 0) {
-            changeText = `▲ ${changePercent}%`;
-            changeClass = 'up';
-        } else if (change < 0) {
-            changeText = `▼ ${Math.abs(changePercent)}%`;
-            changeClass = 'down';
-        } else {
-            changeText = `– 0.00%`;
-            changeClass = 'neutral';
+    function createAndInjectKpiElements() {
+        const kpiGrid = document.getElementById('kpi-grid');
+        const kpiDefs = [
+            { id: 'total-actions', title: 'Total Actions (24h)', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' },
+            { id: 'ban-rate', title: 'Ban Rate', icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
+            { id: 'appeal-success', title: 'Appeal Success', icon: 'M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.085a2 2 0 00-1.736.97l-2.714 4.224a2 2 0 01-1.736 1.03H4.5a2 2 0 00-2 2v4a2 2 0 002 2h2.5', color: 'green' },
+            { id: 'active-mods', title: 'Active Mods', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 013 5.197', color: 'purple' },
+            { id: 'time-to-action', title: 'Avg. Time to Action', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'teal' },
+            { id: 'alert-level', title: 'Alert Level', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', color: 'yellow' },
+        ];
+        kpiGrid.innerHTML = kpiDefs.map(k => `
+            <div class="card p-4 flex items-center">
+                <div class="bg-gray-700 p-3 rounded-lg mr-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-${k.color}-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${k.icon}" /></svg>
+                </div>
+                <div>
+                    <h2 class="text-sm font-medium text-gray-400">${k.title}</h2>
+                    <p id="kpi-${k.id}-value" class="text-2xl font-bold text-white mt-1">--</p>
+                    <p id="kpi-${k.id}-change" class="text-sm font-medium">--</p>
+                </div>
+            </div>`).join('');
+    }
+
+    function updateKpiElement({id, value, prev, isInt, suffix = '', isStatic, invertChange}) {
+        const valueEl = document.getElementById(`kpi-${id}-value`);
+        const changeEl = document.getElementById(`kpi-${id}-change`);
+        if (!valueEl || !changeEl) return;
+
+        valueEl.textContent = (isInt ? formatNumber(Math.round(value)) : value) + (suffix || '');
+
+        if (isStatic) {
+            changeEl.textContent = 'Based on volume';
+            changeEl.className = 'text-sm text-gray-400';
+            return;
         }
+
+        let changeText = '', changeClass = 'neutral';
+        const change = value - prev;
+        const changePercent = prev ? ((change / prev) * 100).toFixed(2) : 0;
+        if (change > 0) { changeText = `▲ ${changePercent}%`; changeClass = invertChange ? 'down' : 'up'; }
+        else if (change < 0) { changeText = `▼ ${Math.abs(changePercent)}%`; changeClass = invertChange ? 'up' : 'down'; }
+        else { changeText = `– 0.00%`; }
+        
         changeEl.textContent = changeText;
         changeEl.className = `text-sm font-medium kpi-value ${changeClass}`;
     }
 
     function renderActivityLog() {
         const tbody = document.getElementById('activity-log-body');
-        let html = '';
-        dataStore.recentActivity.slice(0, 15).forEach(item => {
-            html += `
-                <tr class="border-b border-gray-700 hover:bg-gray-800">
-                    <td class="px-4 py-2 font-mono text-gray-400">${item.id}</td>
-                    <td class="px-4 py-2"><span class="px-2 py-1 text-xs font-semibold rounded-full ${item.tagClass}">${item.action}</span></td>
-                    <td class="px-4 py-2">${item.reason}</td>
-                    <td class="px-4 py-2 text-gray-400">${dayjs(item.rawTime).fromNow()}</td>
-                </tr>
+        let activity = dataStore.recentActivity;
+
+        if (activeFilter) {
+            activity = activity.filter(item => item.moderator === activeFilter.value);
+        }
+
+        tbody.innerHTML = activity.slice(0, 50).map(item => `
+            <tr class="border-b border-gray-800 hover:bg-gray-700/50">
+                <td class="px-4 py-2 font-mono text-gray-400">${item.id}</td>
+                <td class="px-4 py-2"><span class="px-2 py-1 text-xs font-semibold rounded-full ${item.tagClass}">${item.action}</span></td>
+                <td class="px-4 py-2">${item.reason}</td>
+                <td class="px-4 py-2 font-medium ${item.isAutomated ? 'text-cyan-400' : 'text-gray-300'}">${item.moderator}</td>
+                <td class="px-4 py-2 text-gray-400">${dayjs(item.rawTime).fromNow()}</td>
+            </tr>
+        `).join('');
+    }
+    
+    function renderFilterState() {
+        const filterDisplay = document.getElementById('filter-display');
+        if (activeFilter) {
+            filterDisplay.innerHTML = `
+                <span>Filtering by: <strong class="text-white">${activeFilter.value}</strong></span>
+                <button id="clear-filter-btn" class="ml-2 text-blue-400 hover:text-blue-300">[Clear]</button>
             `;
-        });
-        tbody.innerHTML = html;
+            document.getElementById('clear-filter-btn').onclick = () => {
+                activeFilter = null;
+                renderFilterState();
+                renderActivityLog();
+            };
+        } else {
+            filterDisplay.innerHTML = '';
+        }
     }
 
     function createCharts() {
         const chartColors = {
-            ban: 'rgba(220, 53, 69, 0.7)',
-            warning: 'rgba(255, 193, 7, 0.7)',
-            delete: 'rgba(108, 117, 125, 0.7)',
-            mute: 'rgba(23, 162, 184, 0.7)',
-            grid: 'rgba(255, 255, 255, 0.1)',
-            text: '#c9d1d9'
+            ban: 'rgba(248, 81, 73, 0.8)', warning: 'rgba(227, 179, 65, 0.8)',
+            delete: 'rgba(139, 148, 158, 0.8)', mute: 'rgba(88, 166, 255, 0.8)',
+            grid: 'rgba(255, 255, 255, 0.1)', text: '#c9d1d9',
+            modColors: ['rgba(248, 81, 73, 0.7)', 'rgba(34, 211, 238, 0.7)', 'rgba(56, 189, 248, 0.7)', 'rgba(63, 185, 80, 0.7)', 'rgba(227, 179, 65, 0.7)', 'rgba(168, 85, 247, 0.7)', 'rgba(236, 72, 153, 0.7)'],
+            ai: 'rgba(22, 163, 74, 0.7)', manual: 'rgba(37, 99, 235, 0.7)'
         };
+        const defaultOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartColors.text } } } };
 
-        // --- Actions Over Time Chart ---
         actionsOverTimeChart = new Chart(ctxActionsOverTime, {
-            type: 'line',
-            data: {
-                labels: dataStore.actions.map(d => d.time),
-                datasets: [
-                    { label: 'Bans', data: dataStore.actions.map(d => d.ban), borderColor: chartColors.ban, tension: 0.4, fill: false },
-                    { label: 'Warnings', data: dataStore.actions.map(d => d.warning), borderColor: chartColors.warning, tension: 0.4, fill: false },
-                    { label: 'Deletions', data: dataStore.actions.map(d => d.delete), borderColor: chartColors.delete, tension: 0.4, fill: false },
-                    { label: 'Mutes', data: dataStore.actions.map(d => d.mute), borderColor: chartColors.mute, tension: 0.4, fill: false }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                scales: {
-                    x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } },
-                    y: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }
-                },
-                plugins: { legend: { labels: { color: chartColors.text } } }
-            }
+            type: 'line', data: { labels: [], datasets: [
+                { label: 'Bans', data: [], borderColor: chartColors.ban, tension: 0.4, fill: false },
+                { label: 'Warnings', data: [], borderColor: chartColors.warning, tension: 0.4, fill: false },
+                { label: 'Deletions', data: [], borderColor: chartColors.delete, tension: 0.4, fill: false },
+                { label: 'Mutes', data: [], borderColor: chartColors.mute, tension: 0.4, fill: false }
+            ]},
+            options: {...defaultOptions, scales: { x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }, y: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } } },
+                plugins: { legend: { labels: { color: chartColors.text } }, tooltip: { callbacks: {
+                    footer: (tooltipItems) => `Total: ${tooltipItems.reduce((a, b) => a + b.parsed.y, 0)}`,
+                }}}}
         });
-
-        // --- Action Type Chart ---
-        const totalActions = dataStore.actions.reduce((acc, d) => {
-            acc.ban += d.ban; acc.warning += d.warning; acc.delete += d.delete; acc.mute += d.mute;
-            return acc;
-        }, { ban: 0, warning: 0, delete: 0, mute: 0 });
 
         actionTypeChart = new Chart(ctxActionType, {
-            type: 'doughnut',
-            data: {
-                labels: ['Bans', 'Warnings', 'Deletions', 'Mutes'],
-                datasets: [{
-                    data: [totalActions.ban, totalActions.warning, totalActions.delete, totalActions.mute],
-                    backgroundColor: [chartColors.ban, chartColors.warning, chartColors.delete, chartColors.mute],
-                    borderColor: '#161b22',
-                    borderWidth: 4
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } }
-            }
-        });
-        
-        // Custom legend for doughnut chart
-        const legendContainer = document.getElementById('action-type-legend');
-        const total = Object.values(totalActions).reduce((a, b) => a + b, 0);
-        actionTypeChart.data.labels.forEach((label, i) => {
-            const value = actionTypeChart.data.datasets[0].data[i];
-            const percentage = ((value / total) * 100).toFixed(1);
-            const color = actionTypeChart.data.datasets[0].backgroundColor[i];
-            legendContainer.innerHTML += `
-                <div class="flex justify-between items-center">
-                    <span><span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></span>${label}</span>
-                    <span class="font-semibold text-white">${percentage}%</span>
-                </div>
-            `;
+            type: 'doughnut', data: { labels: dataStore.actionTypes, datasets: [{ data: [], backgroundColor: [chartColors.ban, chartColors.warning, chartColors.delete, chartColors.mute], borderColor: '#161b22', borderWidth: 4 }] },
+            options: {...defaultOptions, plugins: { legend: { display: false } } }
         });
 
-        // --- Hotspots Chart ---
-        hotspotsChart = new Chart(ctxHotspots, {
-            type: 'bar',
-            data: {
-                labels: dataStore.categories,
-                datasets: [{
-                    label: 'Action Count',
-                    data: dataStore.categories.map(() => randomBetween(500, 5000)),
-                    backgroundColor: 'rgba(38, 126, 255, 0.6)',
-                    borderColor: 'rgba(38, 126, 255, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true, maintainAspectRatio: false,
-                scales: {
-                    x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } },
-                    y: { ticks: { color: chartColors.text }, grid: { display: false } }
-                },
-                plugins: { legend: { display: false } }
-            }
+        modPerformanceChart = new Chart(ctxModPerformance, {
+            type: 'polarArea', data: { labels: dataStore.moderators, datasets: [{ data: [], backgroundColor: chartColors.modColors }] },
+            options: {...defaultOptions, onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const clickedIndex = elements[0].index;
+                    activeFilter = { type: 'moderator', value: modPerformanceChart.data.labels[clickedIndex] };
+                    renderFilterState();
+                    renderActivityLog();
+                }
+            }, plugins: { legend: { position: 'bottom', labels: { color: chartColors.text, boxWidth: 12, padding: 10 } } }, scales: { r: { grid: { color: chartColors.grid }, ticks: { display: false } } } }
+        });
+
+        aiVsManualChart = new Chart(ctxAiVsManual, {
+            type: 'bar', data: { labels: dataStore.actionTypes, datasets: [
+                { label: 'Automated', data: [], backgroundColor: chartColors.ai, stack: 'Stack 0' },
+                { label: 'Manual', data: [], backgroundColor: chartColors.manual, stack: 'Stack 0' }
+            ]},
+            options: {...defaultOptions, scales: { x: { stacked: true, ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }, y: { stacked: true, ticks: { color: chartColors.text }, grid: { color: chartColors.grid } } } }
         });
     }
 
     function updateCharts() {
-        // Update Actions Over Time
         actionsOverTimeChart.data.labels = dataStore.actions.map(d => d.time);
-        actionsOverTimeChart.data.datasets[0].data = dataStore.actions.map(d => d.ban);
-        actionsOverTimeChart.data.datasets[1].data = dataStore.actions.map(d => d.warning);
-        actionsOverTimeChart.data.datasets[2].data = dataStore.actions.map(d => d.delete);
-        actionsOverTimeChart.data.datasets[3].data = dataStore.actions.map(d => d.mute);
+        actionsOverTimeChart.data.datasets.forEach(ds => {
+            let key = ds.label.toLowerCase();
+            if (key === 'deletions') key = 'delete';
+            else if (key.endsWith('s')) key = key.slice(0, -1);
+            ds.data = dataStore.actions.map(d => d[key]);
+        });
         actionsOverTimeChart.update('none');
 
-        // Update Action Type (less frequent update needed, but for simulation)
-        const totalActions = dataStore.actions.reduce((acc, d) => {
-            acc.ban += d.ban; acc.warning += d.warning; acc.delete += d.delete; acc.mute += d.mute;
-            return acc;
-        }, { ban: 0, warning: 0, delete: 0, mute: 0 });
-        actionTypeChart.data.datasets[0].data = [totalActions.ban, totalActions.warning, totalActions.delete, totalActions.mute];
+        const totalActionsByType = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type).length);
+        actionTypeChart.data.datasets[0].data = totalActionsByType;
         actionTypeChart.update('none');
-
-        // Update Hotspots
-        hotspotsChart.data.datasets[0].data = hotspotsChart.data.datasets[0].data.map(d => Math.max(200, d + randomBetween(-100, 100)));
-        hotspotsChart.update('none');
+        
+        const legendContainer = document.getElementById('action-type-legend');
+        const total = totalActionsByType.reduce((a, b) => a + b, 0);
+        legendContainer.innerHTML = '';
+        actionTypeChart.data.labels.forEach((label, i) => {
+            const value = actionTypeChart.data.datasets[0].data[i];
+            const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+            const color = actionTypeChart.data.datasets[0].backgroundColor[i];
+            legendContainer.innerHTML += `<div class="flex justify-between items-center"><span><span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></span>${label}</span><span class="font-semibold text-white">${percentage}%</span></div>`;
+        });
+        
+        modPerformanceChart.data.datasets[0].data = dataStore.moderators.map(mod => dataStore.recentActivity.filter(a => a.moderator === mod).length);
+        modPerformanceChart.update('none');
+        
+        aiVsManualChart.data.datasets[0].data = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type && a.isAutomated).length);
+        aiVsManualChart.data.datasets[1].data = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type && !a.isAutomated).length);
+        aiVsManualChart.update('none');
     }
 
     function tick() {
@@ -405,14 +426,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Initial Load ---
+    createAndInjectKpiElements();
     generateInitialData();
     createCharts();
-    renderKPIs();
-    renderActivityLog();
-    document.getElementById('last-updated').textContent = dayjs().format('HH:mm:ss');
+    tick();
     
     // --- Update Interval ---
-    setInterval(tick, 3000); // Update every 3 seconds for a lively feel
+    setInterval(tick, 2500);
 });
 </script>
 

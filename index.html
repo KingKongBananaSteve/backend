@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roblox Moderation Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        .card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        /* Custom scrollbar for the activity log */
+        .activity-log::-webkit-scrollbar {
+            width: 6px;
+        }
+        .activity-log::-webkit-scrollbar-track {
+            background: #161b22;
+        }
+        .activity-log::-webkit-scrollbar-thumb {
+            background-color: #30363d;
+            border-radius: 3px;
+        }
+        .kpi-value.up { color: #28a745; }
+        .kpi-value.down { color: #dc3545; }
+        .kpi-value.neutral { color: #ffc107; }
+
+        .tag-ban { background-color: #dc3545; color: white; }
+        .tag-warning { background-color: #ffc107; color: #161b22; }
+        .tag-delete { background-color: #6c757d; color: white; }
+        .tag-mute { background-color: #17a2b8; color: white; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 lg:p-6">
+
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-white">Moderation Analytics</h1>
+                <p class="text-gray-400">Simulated Real-Time Roblox Trust & Safety Dashboard</p>
+            </div>
+            <div class="text-sm text-gray-400 mt-2 sm:mt-0">
+                <p>Last Update: <span id="last-updated" class="font-semibold text-white"></span></p>
+                <p>Status: <span class="text-green-400 font-bold">● Live</span></p>
+            </div>
+        </header>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="card p-4">
+                <h2 class="text-sm font-medium text-gray-400">Total Actions (24h)</h2>
+                <p id="kpi-total-actions" class="text-3xl font-bold text-white mt-1">--</p>
+                <p id="kpi-total-actions-change" class="text-sm font-medium">--</p>
+            </div>
+            <div class="card p-4">
+                <h2 class="text-sm font-medium text-gray-400">Ban Rate</h2>
+                <p id="kpi-ban-rate" class="text-3xl font-bold text-white mt-1">--</p>
+                <p id="kpi-ban-rate-change" class="text-sm font-medium">--</p>
+            </div>
+            <div class="card p-4">
+                <h2 class="text-sm font-medium text-gray-400">Appeal Success Rate</h2>
+                <p id="kpi-appeal-rate" class="text-3xl font-bold text-white mt-1">--</p>
+                <p id="kpi-appeal-rate-change" class="text-sm font-medium">--</p>
+            </div>
+            <div class="card p-4">
+                <h2 class="text-sm font-medium text-gray-400">Current Alert Level</h2>
+                <p id="kpi-alert-level" class="text-3xl font-bold text-yellow-400 mt-1">--</p>
+                <p class="text-sm text-gray-400">Based on volume</p>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Moderation Actions Over Time -->
+            <div class="card lg:col-span-2 p-4">
+                <h3 class="font-semibold text-white mb-4">Moderation Actions (Last 24 Hours)</h3>
+                <div class="chart-container">
+                    <canvas id="actionsOverTimeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Action Type Distribution -->
+            <div class="card p-4">
+                <h3 class="font-semibold text-white mb-4">Action Type Distribution</h3>
+                <div class="chart-container" style="height: 280px;">
+                    <canvas id="actionTypeChart"></canvas>
+                </div>
+                <div id="action-type-legend" class="mt-4 text-sm text-gray-400 space-y-1"></div>
+            </div>
+
+            <!-- Moderation Hotspots -->
+            <div class="card p-4">
+                 <h3 class="font-semibold text-white mb-4">Moderation Hotspots (by Category)</h3>
+                <div class="chart-container">
+                    <canvas id="hotspotsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Activity Log -->
+            <div class="card lg:col-span-2 p-4 flex flex-col">
+                <h3 class="font-semibold text-white mb-4">Recent Moderation Activity</h3>
+                <div class="flex-grow overflow-y-auto activity-log" style="max-height: 350px;">
+                    <table class="w-full text-sm text-left">
+                        <thead class="text-xs text-gray-400 uppercase sticky top-0 bg-[#161b22]">
+                            <tr>
+                                <th scope="col" class="px-4 py-2">User ID</th>
+                                <th scope="col" class="px-4 py-2">Action</th>
+                                <th scope="col" class="px-4 py-2">Reason</th>
+                                <th scope="col" class="px-4 py-2">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-log-body">
+                           <!-- JS will populate this -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+dayjs.extend(dayjs_plugin_relativeTime);
+
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Chart Contexts ---
+    const ctxActionsOverTime = document.getElementById('actionsOverTimeChart').getContext('2d');
+    const ctxActionType = document.getElementById('actionTypeChart').getContext('2d');
+    const ctxHotspots = document.getElementById('hotspotsChart').getContext('2d');
+
+    // --- Chart Instances ---
+    let actionsOverTimeChart, actionTypeChart, hotspotsChart;
+
+    // --- Simulated Data Store ---
+    const dataStore = {
+        actions: [],
+        categories: ['Harassment', 'Scamming', 'Inappropriate Content', 'Exploiting', 'Spam', 'Off-platform Behavior'],
+        actionTypes: ['Ban', 'Warning', 'Asset Deletion', 'Mute'],
+        recentActivity: []
+    };
+
+    // --- Utility Functions ---
+    const randomBetween = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
+    const formatNumber = (num) => num.toLocaleString('en-US');
+
+    // --- Data Simulation ---
+    function generateInitialData() {
+        const now = dayjs();
+        let currentTime = now.subtract(24, 'hour');
+        let baseBan = 10, baseWarn = 30, baseDel = 20, baseMute = 15;
+        
+        for (let i = 0; i < 24; i++) {
+            dataStore.actions.push({
+                time: currentTime.format('HH:00'),
+                ban: baseBan + randomBetween(-5, 10),
+                warning: baseWarn + randomBetween(-10, 15),
+                delete: baseDel + randomBetween(-8, 12),
+                mute: baseMute + randomBetween(-5, 8)
+            });
+            currentTime = currentTime.add(1, 'hour');
+        }
+
+        for (let i = 0; i < 20; i++) {
+            generateNewActivity();
+        }
+        dataStore.recentActivity.sort((a,b) => b.rawTime - a.rawTime);
+    }
+
+    function generateNewActivity() {
+        const now = dayjs();
+        const action = dataStore.actionTypes[randomBetween(0, 3)];
+        const newActivity = {
+            id: `U${randomBetween(10000000, 99999999)}`,
+            action: action,
+            reason: dataStore.categories[randomBetween(0, 5)],
+            timestamp: now.fromNow(),
+            rawTime: now,
+            tagClass: `tag-${action.split(' ')[0].toLowerCase()}`
+        };
+        dataStore.recentActivity.unshift(newActivity);
+        if (dataStore.recentActivity.length > 50) {
+            dataStore.recentActivity.pop();
+        }
+    }
+    
+    function updateData() {
+        // Update time series data
+        const lastHour = dataStore.actions[dataStore.actions.length - 1];
+        dataStore.actions.shift();
+        dataStore.actions.push({
+            time: dayjs().format('HH:00'),
+            ban: Math.max(5, lastHour.ban + randomBetween(-3, 3)),
+            warning: Math.max(10, lastHour.warning + randomBetween(-5, 5)),
+            delete: Math.max(8, lastHour.delete + randomBetween(-4, 4)),
+            mute: Math.max(5, lastHour.mute + randomBetween(-3, 3))
+        });
+        
+        // Add a new activity log entry
+        generateNewActivity();
+    }
+
+    // --- Rendering and Chart Drawing ---
+    function renderKPIs() {
+        const last24h = dataStore.actions.slice(-24);
+        const totalActions = last24h.reduce((sum, d) => sum + d.ban + d.warning + d.delete + d.mute, 0);
+        const prevTotalActions = totalActions - last24h[23].ban + last24h[0].ban; // Simplified change calc
+        const totalBans = last24h.reduce((sum, d) => sum + d.ban, 0);
+        
+        const banRate = ((totalBans / totalActions) * 100).toFixed(2);
+        const prevBanRate = (((totalBans - last24h[23].ban) / (totalActions - last24h[23].ban)) * 100).toFixed(2);
+
+        const appealRate = (randomBetween(1500, 2500) / 100).toFixed(2);
+        const prevAppealRate = (appealRate * (1 + randomBetween(-5, 5) / 100)).toFixed(2);
+
+        updateKpiElement('kpi-total-actions', totalActions, prevTotalActions, true);
+        updateKpiElement('kpi-ban-rate', banRate, prevBanRate, false, '%');
+        updateKpiElement('kpi-appeal-rate', appealRate, prevAppealRate, false, '%');
+
+        let alertLevel = 'Normal';
+        if (totalActions > 24 * 80) alertLevel = 'Elevated';
+        if (totalActions > 24 * 100) alertLevel = 'High';
+        document.getElementById('kpi-alert-level').textContent = alertLevel;
+    }
+
+    function updateKpiElement(id, value, prevValue, isInt, suffix = '') {
+        const el = document.getElementById(id);
+        const changeEl = document.getElementById(`${id}-change`);
+        const change = value - prevValue;
+        const changePercent = ((change / prevValue) * 100).toFixed(2);
+        
+        el.textContent = (isInt ? formatNumber(Math.round(value)) : value) + suffix;
+        
+        let changeText, changeClass;
+        if (change > 0) {
+            changeText = `▲ ${changePercent}%`;
+            changeClass = 'up';
+        } else if (change < 0) {
+            changeText = `▼ ${Math.abs(changePercent)}%`;
+            changeClass = 'down';
+        } else {
+            changeText = `– 0.00%`;
+            changeClass = 'neutral';
+        }
+        changeEl.textContent = changeText;
+        changeEl.className = `text-sm font-medium kpi-value ${changeClass}`;
+    }
+
+    function renderActivityLog() {
+        const tbody = document.getElementById('activity-log-body');
+        let html = '';
+        dataStore.recentActivity.slice(0, 15).forEach(item => {
+            html += `
+                <tr class="border-b border-gray-700 hover:bg-gray-800">
+                    <td class="px-4 py-2 font-mono text-gray-400">${item.id}</td>
+                    <td class="px-4 py-2"><span class="px-2 py-1 text-xs font-semibold rounded-full ${item.tagClass}">${item.action}</span></td>
+                    <td class="px-4 py-2">${item.reason}</td>
+                    <td class="px-4 py-2 text-gray-400">${dayjs(item.rawTime).fromNow()}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function createCharts() {
+        const chartColors = {
+            ban: 'rgba(220, 53, 69, 0.7)',
+            warning: 'rgba(255, 193, 7, 0.7)',
+            delete: 'rgba(108, 117, 125, 0.7)',
+            mute: 'rgba(23, 162, 184, 0.7)',
+            grid: 'rgba(255, 255, 255, 0.1)',
+            text: '#c9d1d9'
+        };
+
+        // --- Actions Over Time Chart ---
+        actionsOverTimeChart = new Chart(ctxActionsOverTime, {
+            type: 'line',
+            data: {
+                labels: dataStore.actions.map(d => d.time),
+                datasets: [
+                    { label: 'Bans', data: dataStore.actions.map(d => d.ban), borderColor: chartColors.ban, tension: 0.4, fill: false },
+                    { label: 'Warnings', data: dataStore.actions.map(d => d.warning), borderColor: chartColors.warning, tension: 0.4, fill: false },
+                    { label: 'Deletions', data: dataStore.actions.map(d => d.delete), borderColor: chartColors.delete, tension: 0.4, fill: false },
+                    { label: 'Mutes', data: dataStore.actions.map(d => d.mute), borderColor: chartColors.mute, tension: 0.4, fill: false }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } },
+                    y: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }
+                },
+                plugins: { legend: { labels: { color: chartColors.text } } }
+            }
+        });
+
+        // --- Action Type Chart ---
+        const totalActions = dataStore.actions.reduce((acc, d) => {
+            acc.ban += d.ban; acc.warning += d.warning; acc.delete += d.delete; acc.mute += d.mute;
+            return acc;
+        }, { ban: 0, warning: 0, delete: 0, mute: 0 });
+
+        actionTypeChart = new Chart(ctxActionType, {
+            type: 'doughnut',
+            data: {
+                labels: ['Bans', 'Warnings', 'Deletions', 'Mutes'],
+                datasets: [{
+                    data: [totalActions.ban, totalActions.warning, totalActions.delete, totalActions.mute],
+                    backgroundColor: [chartColors.ban, chartColors.warning, chartColors.delete, chartColors.mute],
+                    borderColor: '#161b22',
+                    borderWidth: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+        
+        // Custom legend for doughnut chart
+        const legendContainer = document.getElementById('action-type-legend');
+        const total = Object.values(totalActions).reduce((a, b) => a + b, 0);
+        actionTypeChart.data.labels.forEach((label, i) => {
+            const value = actionTypeChart.data.datasets[0].data[i];
+            const percentage = ((value / total) * 100).toFixed(1);
+            const color = actionTypeChart.data.datasets[0].backgroundColor[i];
+            legendContainer.innerHTML += `
+                <div class="flex justify-between items-center">
+                    <span><span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></span>${label}</span>
+                    <span class="font-semibold text-white">${percentage}%</span>
+                </div>
+            `;
+        });
+
+        // --- Hotspots Chart ---
+        hotspotsChart = new Chart(ctxHotspots, {
+            type: 'bar',
+            data: {
+                labels: dataStore.categories,
+                datasets: [{
+                    label: 'Action Count',
+                    data: dataStore.categories.map(() => randomBetween(500, 5000)),
+                    backgroundColor: 'rgba(38, 126, 255, 0.6)',
+                    borderColor: 'rgba(38, 126, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } },
+                    y: { ticks: { color: chartColors.text }, grid: { display: false } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    function updateCharts() {
+        // Update Actions Over Time
+        actionsOverTimeChart.data.labels = dataStore.actions.map(d => d.time);
+        actionsOverTimeChart.data.datasets[0].data = dataStore.actions.map(d => d.ban);
+        actionsOverTimeChart.data.datasets[1].data = dataStore.actions.map(d => d.warning);
+        actionsOverTimeChart.data.datasets[2].data = dataStore.actions.map(d => d.delete);
+        actionsOverTimeChart.data.datasets[3].data = dataStore.actions.map(d => d.mute);
+        actionsOverTimeChart.update('none');
+
+        // Update Action Type (less frequent update needed, but for simulation)
+        const totalActions = dataStore.actions.reduce((acc, d) => {
+            acc.ban += d.ban; acc.warning += d.warning; acc.delete += d.delete; acc.mute += d.mute;
+            return acc;
+        }, { ban: 0, warning: 0, delete: 0, mute: 0 });
+        actionTypeChart.data.datasets[0].data = [totalActions.ban, totalActions.warning, totalActions.delete, totalActions.mute];
+        actionTypeChart.update('none');
+
+        // Update Hotspots
+        hotspotsChart.data.datasets[0].data = hotspotsChart.data.datasets[0].data.map(d => Math.max(200, d + randomBetween(-100, 100)));
+        hotspotsChart.update('none');
+    }
+
+    function tick() {
+        updateData();
+        renderKPIs();
+        renderActivityLog();
+        updateCharts();
+        document.getElementById('last-updated').textContent = dayjs().format('HH:mm:ss');
+    }
+
+    // --- Initial Load ---
+    generateInitialData();
+    createCharts();
+    renderKPIs();
+    renderActivityLog();
+    document.getElementById('last-updated').textContent = dayjs().format('HH:mm:ss');
+    
+    // --- Update Interval ---
+    setInterval(tick, 3000); // Update every 3 seconds for a lively feel
+});
+</script>
+
+</body>
+</html>

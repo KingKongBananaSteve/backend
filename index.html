@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Roblox Moderation Analytics 7.0</title>
+    <title>Roblox Moderation Analytics 9.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -28,7 +30,7 @@
             border-color: #8b949e;
             transform: translateY(-4px);
         }
-        .chart-container, .leaderboard-container {
+        .chart-container, .leaderboard-container, .map-container {
             position: relative;
             width: 100%;
             flex-grow: 1;
@@ -49,57 +51,88 @@
         .clickable { cursor: pointer; }
         .clickable-row:hover { background-color: rgba(255, 255, 255, 0.05); }
         
-        #filter-display { transition: all 0.3s ease; }
+        .country { fill: #30363d; stroke: #0d1117; stroke-width: 0.5px; transition: fill 0.3s ease; }
+        
+        .alert-ticker {
+            background-color: #f85149; color: white; padding: 0.5rem; text-align: center;
+            font-weight: 600; position: sticky; top: 0; z-index: 50;
+            overflow: hidden; white-space: nowrap;
+        }
+        .alert-ticker-content { display: inline-block; padding-left: 100%; animation: ticker-scroll 30s linear infinite; }
+        @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); z-index: 100;
+            display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background-color: #161b22; border: 1px solid #30363d;
+            border-radius: 8px; padding: 2rem; width: 90%; max-width: 700px;
+        }
+        .action-button {
+            padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; transition: background-color 0.2s ease;
+        }
     </style>
 </head>
 <body class="antialiased">
+    <div id="alert-ticker-container"></div>
 
     <div class="container mx-auto p-4 lg:p-6">
 
         <!-- Header -->
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center my-6">
             <div>
-                <h1 class="text-3xl font-bold text-white">Moderation Analytics 7.0</h1>
-                <p class="text-gray-400">Global Operations Command Center</p>
+                <h1 class="text-3xl font-bold text-white">Moderation Analytics 9.7</h1>
+                <p class="text-gray-400">Actionable Command Center</p>
             </div>
-            <div class="text-sm text-gray-400 mt-2 sm:mt-0 flex items-center">
-                <div class="flex items-center mr-4">
-                    <span class="relative flex h-3 w-3 mr-2">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                    </span>
-                    <span class="font-bold text-green-400">Live</span>
-                </div>
-                <div>
-                    <p>Last Update: <span id="last-updated" class="font-semibold text-white"></span></p>
+            <div class="flex items-center space-x-4">
+                <div class="text-sm text-gray-400 mt-2 sm:mt-0 flex items-center">
+                    <div class="flex items-center mr-4">
+                        <span class="relative flex h-3 w-3 mr-2">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                        </span>
+                        <span class="font-bold text-green-400">Live</span>
+                    </div>
+                    <div>
+                        <p>Last Update: <span id="last-updated" class="font-semibold text-white"></span></p>
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- KPIs -->
-        <div id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-            <!-- KPI cards are injected here -->
-        </div>
+        <div id="kpi-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"></div>
 
         <!-- Main Content Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
             <div class="card md:col-span-2 lg:col-span-4">
-                <h3 class="font-semibold text-white mb-4">Moderation Actions (Last 24 Hours)</h3>
+                <h3 class="font-semibold text-white mb-4">Live Moderation Actions</h3>
                 <div class="chart-container" style="height: 320px;"><canvas id="actionsOverTimeChart"></canvas></div>
             </div>
             
             <div class="card">
                 <h3 class="font-semibold text-white mb-4">Action Type Distribution</h3>
-                <div class="chart-container" style="height: 200px;"><canvas id="actionTypeChart"></canvas></div>
+                <div class="chart-container clickable" style="height: 200px;"><canvas id="actionTypeChart"></canvas></div>
                 <div id="action-type-legend" class="mt-4 text-sm text-gray-400 space-y-1"></div>
+            </div>
+
+            <div class="card lg:col-span-2">
+                <h3 class="font-semibold text-white mb-4">Global Incident Heatmap</h3>
+                <div class="map-container" id="map-container"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold text-white mb-4">Hot Topics & Keywords</h3>
+                <div id="hot-topics-container" class="space-y-2"></div>
             </div>
 
             <div class="card">
                  <h3 class="font-semibold text-white mb-4">Top Moderators (24h)</h3>
-                 <div id="leaderboard-container" class="leaderboard-container scrollable-list overflow-y-auto" style="max-height: 280px;">
-                    <!-- Leaderboard table will be injected here -->
-                 </div>
+                 <div id="leaderboard-container" class="leaderboard-container scrollable-list overflow-y-auto" style="max-height: 280px;"></div>
             </div>
 
             <div class="card">
@@ -108,10 +141,29 @@
             </div>
 
             <div class="card">
-                <h3 class="font-semibold text-white mb-4">Moderation Efficiency</h3>
-                <div id="efficiency-container" class="space-y-4 text-sm">
-                    <!-- Efficiency stats will be injected here -->
-                </div>
+                <h3 class="font-semibold text-white mb-4">Moderator Shift Status</h3>
+                <div id="mod-shift-container" class="scrollable-list overflow-y-auto" style="max-height: 280px;"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold text-white mb-4">AI Pattern Recognition</h3>
+                <div id="pattern-container" class="space-y-3"></div>
+            </div>
+
+            <div class="card lg:col-span-2">
+                <h3 class="font-semibold text-white mb-4">Moderation Efficiency & Accuracy</h3>
+                <div id="efficiency-container" class="space-y-4 text-sm"></div>
+            </div>
+
+            <div class="card">
+                <h3 class="font-semibold text-white mb-4">Appeal Rate Analysis</h3>
+                <div id="appeal-analysis-container" class="space-y-2"></div>
+            </div>
+            
+            <!-- FIX: Added the missing anomaly detection card back into the grid -->
+            <div class="card">
+                <h3 class="font-semibold text-white mb-4">Forecast & Anomaly Detection</h3>
+                <div id="anomaly-container" class="flex flex-col justify-center items-center h-full text-center"></div>
             </div>
 
             <div class="card md:col-span-2 lg:col-span-4">
@@ -123,7 +175,7 @@
                     <table class="w-full text-sm text-left">
                         <thead class="text-xs text-gray-400 uppercase sticky top-0 bg-[#161b22]">
                             <tr>
-                                <th scope="col" class="px-4 py-2">User ID</th>
+                                <th scope="col" class="px-4 py-2">Case ID</th>
                                 <th scope="col" class="px-4 py-2">Action</th>
                                 <th scope="col" class="px-4 py-2">Reason</th>
                                 <th scope="col" class="px-4 py-2">Moderator</th>
@@ -134,32 +186,51 @@
                     </table>
                 </div>
             </div>
-
         </div>
     </div>
+
+    <!-- Modals -->
+    <div id="case-file-modal" class="modal-backdrop hidden"></div>
+    <div id="mod-deep-dive-modal" class="modal-backdrop hidden"></div>
+    <div id="report-modal" class="modal-backdrop hidden"></div>
 
 <script>
 dayjs.extend(dayjs_plugin_relativeTime);
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Chart Contexts ---
+    // --- Chart Contexts & Instances ---
     const ctxActionsOverTime = document.getElementById('actionsOverTimeChart').getContext('2d');
     const ctxActionType = document.getElementById('actionTypeChart').getContext('2d');
     const ctxAiVsManual = document.getElementById('aiVsManualChart').getContext('2d');
-
-    // --- Chart Instances ---
-    let actionsOverTimeChart, actionTypeChart, aiVsManualChart;
+    let actionsOverTimeChart, actionTypeChart, aiVsManualChart, modDetailChart;
 
     // --- State ---
     let activeFilter = null;
 
     // --- Simulated Data Store ---
     const dataStore = {
-        actions: [],
+        liveActionCounts: {ban: [], warning: [], delete: [], mute: []},
+        liveActionLabels: [],
         categories: ['Harassment', 'Scamming', 'Inappropriate Content', 'Exploiting', 'Spam', 'Off-platform Behavior'],
         actionTypes: ['Ban', 'Warning', 'Asset Deletion', 'Mute'],
         moderators: [],
-        recentActivity: []
+        recentActivity: [],
+        alerts: [],
+        patterns: [],
+        hotTopics: [
+            { term: 'free robux link', trend: 120 },
+            { term: 'condo', trend: 95 },
+            { term: 'headless horseman', trend: 80 },
+            { term: 'offensive song id', trend: 65 },
+            { term: 'account trading', trend: 50 },
+            { term: 'off-site deals', trend: 45 }
+        ],
+        countryCodeMap: {
+            "USA": "840", "BRA": "076", "RUS": "643", "DEU": "276", "GBR": "826", 
+            "PHL": "608", "CAN": "124", "FRA": "250", "AUS": "036", "MEX": "484", 
+            "IDN": "360", "VNM": "704", "TUR": "792", "POL": "616", "THA": "764", "NLD": "528"
+        },
+        countryCodes: []
     };
 
     // --- Utility Functions ---
@@ -168,30 +239,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Data Simulation ---
     function generateModeratorPool() {
-        dataStore.moderators.push('AutoMod-Ban', 'AutoMod-Mute', 'ModBot-A7');
+        const queues = ['Spam', 'Harassment', 'Scamming', 'General'];
+        dataStore.moderators.push({ name: 'AutoMod-Ban', status: 'Online', queue: 'Bans' });
+        dataStore.moderators.push({ name: 'AutoMod-Mute', status: 'Online', queue: 'Mutes' });
+        dataStore.moderators.push({ name: 'ModBot-A7', status: 'Online', queue: 'Warnings' });
         for (let i = 1; i <= 75; i++) {
-            dataStore.moderators.push(`Mod-${100 + i}`);
+            dataStore.moderators.push({
+                name: `Mod-${100 + i}`,
+                status: Math.random() < 0.7 ? 'Online' : 'Offline',
+                queue: queues[randomBetween(0, queues.length - 1)]
+            });
         }
     }
 
     function generateInitialData() {
-        const now = dayjs();
-        let currentTime = now.subtract(24, 'hour');
-        
-        for (let i = 0; i < 24; i++) {
-            dataStore.actions.push({
-                time: currentTime.format('HH:00'),
-                ban: randomBetween(30, 60), warning: randomBetween(50, 90),
-                delete: randomBetween(40, 70), mute: randomBetween(35, 75)
-            });
-            currentTime = currentTime.add(1, 'hour');
-        }
-
-        for (let i = 0; i < 1000; i++) { generateNewActivity(); }
+        dataStore.countryCodes = Object.keys(dataStore.countryCodeMap);
+        for (let i = 0; i < 1500; i++) { generateNewActivity(); }
         dataStore.recentActivity.sort((a,b) => b.rawTime - a.rawTime);
+        
+        for (let i = 0; i < 60; i++) {
+            dataStore.liveActionLabels.push('');
+            dataStore.liveActionCounts.ban.push(randomBetween(1,5));
+            dataStore.liveActionCounts.warning.push(randomBetween(2,8));
+            dataStore.liveActionCounts.delete.push(randomBetween(1,6));
+            dataStore.liveActionCounts.mute.push(randomBetween(1,7));
+        }
     }
 
-    function generateNewActivity() {
+    function generateNewActivity(forceAnomaly = false, reasonOverride = null) {
         const now = dayjs();
         const action = dataStore.actionTypes[randomBetween(0, 3)];
         
@@ -199,36 +274,81 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action === 'Ban' && Math.random() < 0.9) moderator = 'AutoMod-Ban';
         else if (action === 'Mute' && Math.random() < 0.7) moderator = 'AutoMod-Mute';
         else if (action === 'Warning' && Math.random() < 0.5) moderator = 'ModBot-A7';
-        else moderator = dataStore.moderators[randomBetween(3, dataStore.moderators.length - 1)];
+        else moderator = dataStore.moderators[randomBetween(3, dataStore.moderators.length - 1)].name;
+
+        const countryAlpha3 = dataStore.countryCodes[randomBetween(0, dataStore.countryCodes.length - 1)];
+        const caseId = `CASE-${randomBetween(1000000, 9999999)}`;
+        const userId = `U${randomBetween(10000000, 99999999)}`;
 
         const newActivity = {
-            id: `U${randomBetween(10000000, 99999999)}`,
+            caseId: caseId,
+            userId: userId,
             action: action,
-            reason: dataStore.categories[randomBetween(0, 5)],
+            reason: reasonOverride || (forceAnomaly ? 'Exploiting' : dataStore.categories[randomBetween(0, 5)]),
             moderator: moderator,
             isAutomated: moderator.includes('Mod'),
             timeToAction: moderator.includes('Mod') ? randomBetween(0, 1) : randomBetween(2, 60),
+            wasOverturned: false, // Default state
+            appealStatus: 'N/A',
+            country: countryAlpha3,
             timestamp: now.fromNow(),
             rawTime: now,
             tagClass: `tag-${action.split(' ')[0].toLowerCase()}`
         };
         dataStore.recentActivity.unshift(newActivity);
-        if (dataStore.recentActivity.length > 3000) dataStore.recentActivity.pop();
+        if (dataStore.recentActivity.length > 4000) dataStore.recentActivity.pop();
+
+        if (Math.random() < 0.001 && !forceAnomaly) {
+            const newAlert = `CRITICAL: Unusual spike in '${newActivity.reason}' reports from ${newActivity.country}.`;
+            if (!dataStore.alerts.includes(newAlert)) {
+                dataStore.alerts.push(newAlert);
+                if(dataStore.alerts.length > 5) dataStore.alerts.shift();
+            }
+        }
+        
+        if (Math.random() < 0.005) { // Chance to generate a pattern
+             dataStore.patterns.unshift({
+                id: `PAT-${randomBetween(100,999)}`,
+                description: `Multiple accounts spamming similar off-site links.`,
+                relatedUsers: [userId, `U${randomBetween(10000000, 99999999)}`, `U${randomBetween(10000000, 99999999)}`]
+            });
+            if(dataStore.patterns.length > 3) dataStore.patterns.pop();
+        }
+        return newActivity;
     }
     
     function updateData() {
-        const lastHour = dataStore.actions[dataStore.actions.length - 1];
-        dataStore.actions.shift();
-        dataStore.actions.push({
-            time: dayjs().format('HH:00'),
-            ban: Math.max(5, lastHour.ban + randomBetween(-5, 5)),
-            warning: Math.max(10, lastHour.warning + randomBetween(-8, 8)),
-            delete: Math.max(8, lastHour.delete + randomBetween(-6, 6)),
-            mute: Math.max(5, lastHour.mute + randomBetween(-7, 7))
-        });
-        for(let i=0; i<15; i++) generateNewActivity();
-    }
+        const isAnomaly = Math.random() < 0.02;
+        let actionsInTick = { ban: 0, warning: 0, delete: 0, mute: 0 };
+        for(let i=0; i < (isAnomaly ? 10 : 2); i++) {
+            const newAction = generateNewActivity(isAnomaly);
+            let key = newAction.action.split(' ')[0].toLowerCase();
+            if (key === 'asset') key = 'delete';
+            actionsInTick[key]++;
+        }
+        
+        dataStore.liveActionCounts.ban.shift();
+        dataStore.liveActionCounts.warning.shift();
+        dataStore.liveActionCounts.delete.shift();
+        dataStore.liveActionCounts.mute.shift();
+        dataStore.liveActionCounts.ban.push(actionsInTick.ban);
+        dataStore.liveActionCounts.warning.push(actionsInTick.warning);
+        dataStore.liveActionCounts.delete.push(actionsInTick.delete);
+        dataStore.liveActionCounts.mute.push(actionsInTick.mute);
 
+        dataStore.hotTopics.forEach(topic => {
+            topic.trend += randomBetween(-5, 5);
+        });
+
+        dataStore.moderators.forEach(mod => {
+            if (!mod.name.includes('Auto')) {
+                if (Math.random() < 0.01) {
+                    mod.status = mod.status === 'Online' ? 'Offline' : 'Online';
+                }
+            }
+        });
+    }
+    
     // --- Rendering Functions ---
     function renderKPIs() {
         const last24hActivity = dataStore.recentActivity.filter(a => dayjs().diff(a.rawTime, 'hour') <= 24);
@@ -240,8 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const banRate = totalActions ? ((totalBans / totalActions) * 100).toFixed(2) : 0;
         const appealRate = (randomBetween(1500, 2500) / 100).toFixed(2);
         const prevAppealRate = (appealRate * (1 + randomBetween(-5, 5) / 100)).toFixed(2);
-        const activeMods = new Set(last24hActivity.map(a => a.moderator)).size;
-        const prevActiveMods = new Set(prev24hActivity.map(a => a.moderator)).size;
+        const activeMods = dataStore.moderators.filter(m => m.status === 'Online').length;
+        const prevActiveMods = activeMods + randomBetween(-2,2);
         const avgTimeToAction = totalActions ? (last24hActivity.reduce((sum, a) => sum + a.timeToAction, 0) / totalActions) : 0;
         const prevAvgTimeToAction = prevTotalActions ? (prev24hActivity.reduce((sum, a) => sum + a.timeToAction, 0) / prevTotalActions) : 0;
         let alertLevel = 'Normal';
@@ -310,18 +430,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderActivityLog() {
         const tbody = document.getElementById('activity-log-body');
         let activity = dataStore.recentActivity;
-
         if (activeFilter) {
             if (activeFilter.type === 'moderator') {
                 activity = activity.filter(item => item.moderator === activeFilter.value);
             } else if (activeFilter.type === 'ai_manual') {
                 activity = activity.filter(item => item.isAutomated === activeFilter.isAutomated && item.action === activeFilter.action);
+            } else if (activeFilter.type === 'action') {
+                activity = activity.filter(item => item.action === activeFilter.value);
             }
         }
-
         tbody.innerHTML = activity.slice(0, 100).map(item => `
-            <tr class="border-b border-gray-800 hover:bg-gray-700/50">
-                <td class="px-4 py-2 font-mono text-gray-400">${item.id}</td>
+            <tr class="border-b border-gray-800 hover:bg-gray-700/50 clickable-row" onclick="showCaseFile('${item.caseId}')">
+                <td class="px-4 py-2 font-mono text-gray-400">${item.caseId}</td>
                 <td class="px-4 py-2"><span class="px-2 py-1 text-xs font-semibold rounded-full ${item.tagClass}">${item.action}</span></td>
                 <td class="px-4 py-2">${item.reason}</td>
                 <td class="px-4 py-2 font-medium ${item.isAutomated ? 'text-cyan-400' : 'text-gray-300'}">${item.moderator}</td>
@@ -338,6 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 filterText = `Moderator: <strong class="text-white">${activeFilter.value}</strong>`;
             } else if (activeFilter.type === 'ai_manual') {
                 filterText = `${activeFilter.isAutomated ? 'Automated' : 'Manual'} ${activeFilter.action}s`;
+            } else if (activeFilter.type === 'action') {
+                filterText = `Action: <strong class="text-white">${activeFilter.value}</strong>`;
             }
             filterDisplay.innerHTML = `
                 <span>Filtering by: ${filterText}</span>
@@ -347,6 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 activeFilter = null;
                 renderFilterState();
                 renderActivityLog();
+                updateCharts();
             };
         } else {
             filterDisplay.innerHTML = '<span>No active filters</span>';
@@ -355,23 +478,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderLeaderboard() {
         const container = document.getElementById('leaderboard-container');
-        const modCounts = dataStore.recentActivity
-            .filter(a => dayjs().diff(a.rawTime, 'hour') <= 24)
-            .reduce((acc, a) => {
-                acc[a.moderator] = (acc[a.moderator] || 0) + 1;
-                return acc;
-            }, {});
+        const activity = dataStore.recentActivity.filter(a => dayjs().diff(a.rawTime, 'hour') <= 24);
+        
+        const modStats = activity.reduce((acc, a) => {
+            if (!acc[a.moderator]) {
+                acc[a.moderator] = { count: 0, overturned: 0 };
+            }
+            acc[a.moderator].count++;
+            if (a.wasOverturned) {
+                acc[a.moderator].overturned++;
+            }
+            return acc;
+        }, {});
 
-        const sortedMods = Object.entries(modCounts).sort((a, b) => b[1] - a[1]);
+        const sortedMods = Object.entries(modStats)
+            .sort((a, b) => b[1].count - a[1].count)
+            .map(([name, stats]) => ({
+                name,
+                ...stats,
+                accuracy: stats.count > 0 ? ((1 - stats.overturned / stats.count) * 100).toFixed(1) : 100
+            }));
 
-        let tableHtml = `<table class="w-full text-sm text-left"><tbody>`;
-        sortedMods.slice(0, 10).forEach(([name, count], index) => {
-            const isAutomated = name.includes('Mod');
+        let tableHtml = `<table class="w-full text-sm text-left">
+            <thead class="text-xs text-gray-400 uppercase">
+                <tr>
+                    <th class="p-2">#</th>
+                    <th class="p-2">Moderator</th>
+                    <th class="p-2 text-right">Actions</th>
+                    <th class="p-2 text-right">Acc.</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        sortedMods.slice(0, 15).forEach((mod, index) => {
+            const isAutomated = mod.name.includes('Mod');
             tableHtml += `
-                <tr class="border-b border-gray-700/50 clickable-row" onclick="setFilter('moderator', '${name}')">
+                <tr class="border-b border-gray-700/50 clickable-row" onclick="showModeratorDeepDive('${mod.name}')">
                     <td class="p-2 font-bold text-gray-400">${index + 1}</td>
-                    <td class="p-2 font-medium ${isAutomated ? 'text-cyan-400' : 'text-gray-300'}">${name}</td>
-                    <td class="p-2 text-right font-mono">${formatNumber(count)}</td>
+                    <td class="p-2 font-medium ${isAutomated ? 'text-cyan-400' : 'text-gray-300'}">${mod.name}</td>
+                    <td class="p-2 text-right font-mono">${formatNumber(mod.count)}</td>
+                    <td class="p-2 text-right font-mono text-green-400">${mod.accuracy}%</td>
                 </tr>
             `;
         });
@@ -381,11 +527,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderEfficiency() {
         const container = document.getElementById('efficiency-container');
-        const aiActions = dataStore.recentActivity.filter(a => a.isAutomated);
-        const manualActions = dataStore.recentActivity.filter(a => !a.isAutomated);
+        const activity = dataStore.recentActivity;
+        const aiActions = activity.filter(a => a.isAutomated);
+        const manualActions = activity.filter(a => !a.isAutomated);
 
         const aiTime = aiActions.length ? (aiActions.reduce((sum, a) => sum + a.timeToAction, 0) / aiActions.length).toFixed(1) : 0;
         const manualTime = manualActions.length ? (manualActions.reduce((sum, a) => sum + a.timeToAction, 0) / manualActions.length).toFixed(1) : 0;
+        const totalOverturns = activity.filter(a => a.wasOverturned).length;
+        const platformAccuracy = activity.length ? ((1 - totalOverturns / activity.length) * 100).toFixed(2) : 100;
         
         container.innerHTML = `
             <div>
@@ -397,11 +546,218 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="w-full bg-gray-700 rounded-full h-2.5 mt-1"><div class="bg-blue-500 h-2.5 rounded-full" style="width: ${manualTime/60*100}%"></div></div>
             </div>
             <div>
-                <div class="flex justify-between"><span>AI Contribution</span><strong class="text-green-400">${(aiActions.length / dataStore.recentActivity.length * 100).toFixed(1)}%</strong></div>
+                <div class="flex justify-between"><span>AI Contribution</span><strong class="text-green-400">${(aiActions.length / activity.length * 100).toFixed(1)}%</strong></div>
+            </div>
+             <div>
+                <div class="flex justify-between"><span>Platform Accuracy</span><strong class="text-green-400">${platformAccuracy}%</strong></div>
             </div>
         `;
     }
+    
+    function renderAnomalyDetection() {
+        const container = document.getElementById('anomaly-container');
+        const lastHourActions = dataStore.recentActivity.filter(a => dayjs().diff(a.rawTime, 'minute') <= 60).length;
+        const historicalAvg = dataStore.recentActivity.length / (24 * 60); // avg per minute
+        const historicalAvgHourly = historicalAvg * 60;
+        
+        const deviation = (lastHourActions - historicalAvgHourly) / historicalAvgHourly;
 
+        if (deviation > 0.5) {
+            container.innerHTML = `
+                <div class="text-red-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    <p class="font-bold text-2xl mt-2">Anomaly Detected</p>
+                    <p class="text-lg">${(deviation * 100).toFixed(0)}% above forecast</p>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                 <div class="text-green-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p class="font-bold text-2xl mt-2">Volume Normal</p>
+                    <p class="text-lg">Within expected range</p>
+                </div>
+            `;
+        }
+    }
+
+    function renderTicker() {
+        const container = document.getElementById('alert-ticker-container');
+        const newAlertString = dataStore.alerts.join('  //  ');
+
+        if (newAlertString) {
+            let ticker = container.querySelector('.alert-ticker');
+            if (!ticker) {
+                container.innerHTML = `<div class="alert-ticker"><div class="alert-ticker-content"></div></div>`;
+                ticker = container.querySelector('.alert-ticker');
+            }
+            
+            const contentDiv = ticker.querySelector('.alert-ticker-content');
+            if (contentDiv.textContent !== newAlertString) {
+                contentDiv.textContent = newAlertString;
+            }
+        } else {
+            container.innerHTML = '';
+        }
+    }
+
+    function renderHotTopics() {
+        const container = document.getElementById('hot-topics-container');
+        container.innerHTML = dataStore.hotTopics.map(topic => {
+            const trendClass = topic.trend > 0 ? 'text-green-400' : 'text-red-400';
+            const trendIcon = topic.trend > 0 ? '▲' : '▼';
+            return `
+                <div class="flex justify-between items-center">
+                    <span class="font-medium text-white">${topic.term}</span>
+                    <span class="${trendClass} font-semibold">${trendIcon} ${Math.abs(topic.trend)}%</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderModeratorShiftView() {
+        const container = document.getElementById('mod-shift-container');
+        const onlineMods = dataStore.moderators.filter(m => m.status === 'Online');
+        container.innerHTML = onlineMods.map(mod => `
+            <div class="flex justify-between items-center text-sm border-b border-gray-700/50 py-1">
+                <span class="font-medium ${mod.name.includes('Mod') ? 'text-cyan-400' : 'text-gray-300'}">${mod.name}</span>
+                <span class="text-gray-400">${mod.queue}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderPatternRecognition() {
+        const container = document.getElementById('pattern-container');
+        if (dataStore.patterns.length === 0) {
+            container.innerHTML = `<p class="text-center text-gray-400">No significant patterns detected.</p>`;
+            return;
+        }
+        container.innerHTML = dataStore.patterns.map(p => `
+            <div class="p-2 bg-gray-900 rounded-md">
+                <p class="font-semibold text-red-400">${p.id}</p>
+                <p class="text-sm">${p.description}</p>
+                <p class="text-xs text-gray-400">Related Users: ${p.relatedUsers.length}</p>
+            </div>
+        `).join('');
+    }
+    
+    function renderAppealAnalysis() {
+        const container = document.getElementById('appeal-analysis-container');
+        let html = '';
+        dataStore.categories.forEach(cat => {
+            const catActions = dataStore.recentActivity.filter(a => a.reason === cat);
+            const overturned = catActions.filter(a => a.wasOverturned).length;
+            const rate = catActions.length > 0 ? (overturned / catActions.length * 100).toFixed(1) : 0;
+            html += `
+                <div class="flex justify-between items-center text-sm">
+                    <span>${cat}</span>
+                    <span class="font-semibold">${rate}% Overturned</span>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    // --- Modal Functions ---
+    window.showCaseFile = (caseId) => {
+        const item = dataStore.recentActivity.find(a => a.caseId === caseId);
+        if (!item) return;
+        const modal = document.getElementById('case-file-modal');
+        const userHistory = dataStore.recentActivity.filter(a => a.userId === item.userId && a.caseId !== item.caseId);
+
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-white">Case File: ${item.caseId}</h2>
+                    <button class="text-gray-400 text-3xl" onclick="closeModal('case-file-modal')">&times;</button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div><strong>User ID:</strong> <span class="font-mono">${item.userId}</span></div>
+                    <div><strong>Moderator:</strong> <span class="font-medium ${item.isAutomated ? 'text-cyan-400' : 'text-gray-300'}">${item.moderator}</span></div>
+                    <div><strong>Action:</strong> <span class="px-2 py-1 text-xs font-semibold rounded-full ${item.tagClass}">${item.action}</span></div>
+                    <div><strong>Reason:</strong> ${item.reason}</div>
+                    <div><strong>Appeal Status:</strong> ${item.wasOverturned ? '<span class="text-red-400">Overturned</span>' : '<span class="text-green-400">Upheld</span>'}</div>
+                    <div><strong>Country:</strong> ${item.country}</div>
+                </div>
+                <div class="mt-6">
+                    <h3 class="font-semibold text-white mb-2">Simulated Evidence</h3>
+                    <div class="p-4 bg-gray-900 rounded-md text-gray-400 italic">
+                        [Placeholder for chat logs or asset image] <br>
+                        User said: "go to my site for free robux!!"
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h3 class="font-semibold text-white mb-2">User Moderation History (${userHistory.length} prior)</h3>
+                    <div class="text-xs space-y-1 text-gray-400">
+                        ${userHistory.slice(0, 3).map(h => `<div>- ${h.action} for ${h.reason} (${dayjs(h.rawTime).fromNow()})</div>`).join('') || 'No prior history.'}
+                    </div>
+                </div>
+                 <div class="mt-6 pt-4 border-t border-gray-700 flex justify-end space-x-3">
+                    <button class="action-button bg-green-600 hover:bg-green-700" onclick="handleCaseAction('${item.caseId}', 'Uphold')">Uphold Decision</button>
+                    <button class="action-button bg-yellow-600 hover:bg-yellow-700" onclick="handleCaseAction('${item.caseId}', 'Overturn')">Overturn & Warn</button>
+                    <button class="action-button bg-red-600 hover:bg-red-700" onclick="handleCaseAction('${item.caseId}', 'Escalate')">Escalate</button>
+                </div>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+    };
+    
+    window.handleCaseAction = (caseId, action) => {
+        console.log(`Action '${action}' taken on case ${caseId}`);
+        const item = dataStore.recentActivity.find(a => a.caseId === caseId);
+        if(item && action === 'Overturn') {
+            item.wasOverturned = true;
+        }
+        closeModal('case-file-modal');
+    };
+
+    window.showModeratorDeepDive = (modName) => {
+        const modal = document.getElementById('mod-deep-dive-modal');
+        const modActivity = dataStore.recentActivity.filter(a => a.moderator === modName);
+        const totalActions = modActivity.length;
+        const overturned = modActivity.filter(a => a.wasOverturned).length;
+        const accuracy = totalActions > 0 ? ((1 - overturned / totalActions) * 100).toFixed(1) : 100;
+        
+        modal.innerHTML = `
+            <div class="modal-content">
+                 <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-white">Deep Dive: ${modName}</h2>
+                    <button class="text-gray-400 text-3xl" onclick="closeModal('mod-deep-dive-modal')">&times;</button>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div><strong>Total Actions:</strong> ${formatNumber(totalActions)}</div>
+                    <div><strong>Accuracy:</strong> <span class="text-green-400">${accuracy}%</span></div>
+                </div>
+                <div class="chart-container" style="height: 200px;"><canvas id="mod-detail-chart"></canvas></div>
+            </div>
+        `;
+        modal.classList.remove('hidden');
+
+        const ctxModDetail = document.getElementById('mod-detail-chart').getContext('2d');
+        const actionsByType = dataStore.actionTypes.map(type => modActivity.filter(a => a.action === type).length);
+        
+        if (modDetailChart) modDetailChart.destroy();
+        modDetailChart = new Chart(ctxModDetail, {
+            type: 'doughnut',
+            data: {
+                labels: dataStore.actionTypes,
+                datasets: [{
+                    data: actionsByType,
+                    backgroundColor: ['#f85149', '#e3b341', '#8b949e', '#58a6ff']
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+        });
+    };
+
+    window.closeModal = (modalId) => {
+        document.getElementById(modalId).classList.add('hidden');
+        if (modDetailChart && modalId === 'mod-deep-dive-modal') {
+            modDetailChart.destroy();
+            modDetailChart = null;
+        }
+    };
+    
     window.setFilter = (type, value, isAutomated, action) => {
         if (type === 'ai_manual') {
             activeFilter = { type, value, isAutomated, action };
@@ -410,6 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         renderFilterState();
         renderActivityLog();
+        updateCharts();
     };
 
     function createCharts() {
@@ -422,13 +779,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: chartColors.text } } } };
 
         actionsOverTimeChart = new Chart(ctxActionsOverTime, {
-            type: 'line', data: { labels: [], datasets: [
-                { label: 'Bans', data: [], borderColor: chartColors.ban, tension: 0.4, fill: true, backgroundColor: 'rgba(248, 81, 73, 0.2)' },
-                { label: 'Warnings', data: [], borderColor: chartColors.warning, tension: 0.4, fill: false },
-                { label: 'Deletions', data: [], borderColor: chartColors.delete, tension: 0.4, fill: false },
-                { label: 'Mutes', data: [], borderColor: chartColors.mute, tension: 0.4, fill: false }
+            type: 'line', data: { labels: dataStore.liveActionLabels, datasets: [
+                { label: 'Bans', data: dataStore.liveActionCounts.ban, borderColor: chartColors.ban, tension: 0.4, fill: true, backgroundColor: 'rgba(248, 81, 73, 0.2)' },
+                { label: 'Warnings', data: dataStore.liveActionCounts.warning, borderColor: chartColors.warning, tension: 0.4, fill: false },
+                { label: 'Deletions', data: dataStore.liveActionCounts.delete, borderColor: chartColors.delete, tension: 0.4, fill: false },
+                { label: 'Mutes', data: dataStore.liveActionCounts.mute, borderColor: chartColors.mute, tension: 0.4, fill: false }
             ]},
-            options: {...defaultOptions, scales: { x: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }, y: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } } },
+            options: {...defaultOptions, scales: { x: { ticks: { display: false }, grid: { color: chartColors.grid } }, y: { ticks: { color: chartColors.text }, grid: { color: chartColors.grid } } },
                 plugins: { legend: { labels: { color: chartColors.text } }, tooltip: { callbacks: {
                     footer: (tooltipItems) => `Total: ${tooltipItems.reduce((a, b) => a + b.parsed.y, 0)}`,
                 }}}}
@@ -436,7 +793,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         actionTypeChart = new Chart(ctxActionType, {
             type: 'doughnut', data: { labels: dataStore.actionTypes, datasets: [{ data: [], backgroundColor: [chartColors.ban, chartColors.warning, chartColors.delete, chartColors.mute], borderColor: '#161b22', borderWidth: 4 }] },
-            options: {...defaultOptions, plugins: { legend: { display: false } } }
+            options: {...defaultOptions, onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const { index } = elements[0];
+                    const actionType = actionTypeChart.data.labels[index];
+                    setFilter('action', actionType);
+                }
+            }, plugins: { legend: { display: false } } }
         });
 
         aiVsManualChart = new Chart(ctxAiVsManual, {
@@ -453,19 +816,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, scales: { x: { stacked: true, ticks: { color: chartColors.text }, grid: { color: chartColors.grid } }, y: { stacked: true, ticks: { color: chartColors.text }, grid: { color: chartColors.grid } } } }
         });
+
+        // Initialize map
+        const width = 400, height = 250;
+        const projection = d3.geoMercator().scale(70).translate([width / 2, height / 1.5]);
+        const path = d3.geoPath().projection(projection);
+        const svg = d3.select("#map-container").append("svg")
+            .attr("viewBox", `0 0 ${width} ${height}`);
+
+        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json").then(world => {
+            svg.append("g").selectAll("path")
+                .data(topojson.feature(world, world.objects.countries).features)
+                .join("path")
+                .attr("d", path)
+                .attr("class", "country")
+                .attr("id", d => `country-${d.id}`);
+        });
     }
 
     function updateCharts() {
-        actionsOverTimeChart.data.labels = dataStore.actions.map(d => d.time);
-        actionsOverTimeChart.data.datasets.forEach(ds => {
-            let key = ds.label.toLowerCase();
-            if (key === 'deletions') key = 'delete';
-            else if (key.endsWith('s')) key = key.slice(0, -1);
-            ds.data = dataStore.actions.map(d => d[key]);
-        });
+        let activity = dataStore.recentActivity;
+        if(activeFilter) {
+             if (activeFilter.type === 'moderator') {
+                activity = activity.filter(item => item.moderator === activeFilter.value);
+            } else if (activeFilter.type === 'ai_manual') {
+                activity = activity.filter(item => item.isAutomated === activeFilter.isAutomated && item.action === activeFilter.action);
+            } else if (activeFilter.type === 'action') {
+                activity = activity.filter(item => item.action === activeFilter.value);
+            }
+        }
+        
+        // Update live chart
         actionsOverTimeChart.update('none');
 
-        const totalActionsByType = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type).length);
+        const totalActionsByType = dataStore.actionTypes.map(type => activity.filter(a => a.action === type).length);
         actionTypeChart.data.datasets[0].data = totalActionsByType;
         actionTypeChart.update('none');
         
@@ -476,33 +860,54 @@ document.addEventListener('DOMContentLoaded', () => {
             const value = actionTypeChart.data.datasets[0].data[i];
             const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
             const color = actionTypeChart.data.datasets[0].backgroundColor[i];
-            legendContainer.innerHTML += `<div class="flex justify-between items-center"><span><span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></span>${label}</span><span class="font-semibold text-white">${percentage}%</span></div>`;
+            legendContainer.innerHTML += `<div class="flex justify-between items-center clickable" onclick="setFilter('action', '${label}')"><span><span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></span>${label}</span><span class="font-semibold text-white">${percentage}%</span></div>`;
         });
         
-        aiVsManualChart.data.datasets[0].data = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type && a.isAutomated).length);
-        aiVsManualChart.data.datasets[1].data = dataStore.actionTypes.map(type => dataStore.recentActivity.filter(a => a.action === type && !a.isAutomated).length);
+        aiVsManualChart.data.datasets[0].data = dataStore.actionTypes.map(type => activity.filter(a => a.action === type && a.isAutomated).length);
+        aiVsManualChart.data.datasets[1].data = dataStore.actionTypes.map(type => activity.filter(a => a.action === type && !a.isAutomated).length);
         aiVsManualChart.update('none');
+
+        // Update map
+        const countryCounts = dataStore.recentActivity.reduce((acc, a) => {
+            const countryId = dataStore.countryCodeMap[a.country];
+            if (countryId) {
+                acc[countryId] = (acc[countryId] || 0) + 1;
+            }
+            return acc;
+        }, {});
+        const maxCount = Math.max(...Object.values(countryCounts), 1);
+        const colorScale = d3.scaleSequential(d3.interpolateRgb("#161b22", "#f85149")).domain([0, maxCount]);
+        
+        d3.selectAll(".country").style("fill", "#30363d"); // Reset all countries
+        Object.entries(countryCounts).forEach(([countryId, count]) => {
+            d3.select(`#country-${countryId}`).style("fill", colorScale(count));
+        });
     }
 
     function tick() {
-        updateData();
         renderKPIs();
         renderActivityLog();
         renderLeaderboard();
         renderEfficiency();
+        renderAnomalyDetection();
+        renderTicker();
+        renderHotTopics();
+        renderModeratorShiftView();
+        renderPatternRecognition();
+        renderAppealAnalysis();
         updateCharts();
         document.getElementById('last-updated').textContent = dayjs().format('HH:mm:ss');
     }
 
-    // --- Initial Load ---
+    // --- Main Execution ---
     createAndInjectKpiElements();
     generateModeratorPool();
     generateInitialData();
     createCharts();
-    tick();
     
-    // --- Update Interval ---
-    setInterval(tick, 2500);
+    setInterval(updateData, 400); 
+    setInterval(tick, 2000);
+    tick(); // Initial render
 });
 </script>
 
